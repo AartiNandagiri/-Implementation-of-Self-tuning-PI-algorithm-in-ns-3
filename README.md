@@ -1,4 +1,4 @@
-Implementation of Self-Tuning PI algorithm in ns-3
+IMPLEMENTATION OF SELF-TUNING PI ALGORITHM IN NS-3
 
 Course Code: CS738
 
