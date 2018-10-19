@@ -33,10 +33,7 @@
 #include "ns3/abort.h"
 #include "pi-queue-disc.h"
 #include "ns3/drop-tail-queue.h"
-//STPI
-bool firstRtt = true;
-Ptr<OutputStreamWrapper> rttStream;
-std::string prefix_file_name = "STPI";
+
 
 namespace ns3 {
 
@@ -90,12 +87,12 @@ TypeId PiQueueDisc::GetTypeId (void)
     .AddAttribute("STPI",
                   "True to enable Self Tuning PI",
                   BooleanValue (false),
-                  MakeBooleanAccessor (&PiQueuDisc::m_isSTPI),
+                  MakeBooleanAccessor (&PiQueueDisc::m_isSTPI),
                   MakeBooleanChecker ())
     .AddAttribute("LinkCapacity",
-                  "The STPI Link Bandwidth",
+                  "The STPI Link Capacity",
                   DataRateValue (DataRate("622Mbps")),
-                  MakeDataRateAccessor (&PiQueueDisc::m_linkBandwidth),
+                  MakeDataRateAccessor (&PiQueueDisc::m_capacity),
                   MakeDataRateChecker ())
     .AddAttribute("Kc",
                   "Filter time constant to smoothen capacity",
@@ -124,7 +121,7 @@ TypeId PiQueueDisc::GetTypeId (void)
                   MakeDoubleChecker<double> ())
     .AddAttribute("Kp",
                   "PI parameter",
-                  DoubleValue (0F),
+                  DoubleValue (0),
                   MakeDoubleAccessor (&PiQueueDisc::m_Kp),
                   MakeDoubleChecker<double> ())
     .AddAttribute("Ki",
@@ -144,8 +141,7 @@ PiQueueDisc::PiQueueDisc ()
   NS_LOG_FUNCTION (this);
   m_uv = CreateObject<UniformRandomVariable> ();
   m_rtrsEvent = Simulator::Schedule (Time (Seconds (1.0 / m_w)), &PiQueueDisc::CalculateP, this);
-   //STPI
-        Simulator::Schedule (Seconds (0.00001), &TraceRtt, prefix_file_name + "-rtt.data");
+ 
 }
 
 PiQueueDisc::~PiQueueDisc ()
@@ -241,7 +237,9 @@ PiQueueDisc::DoEnqueue (Ptr<QueueDiscItem> item)
 
   // No drop
   bool retval = GetInternalQueue (0)->Enqueue (item);
-
+  //Self Tuning PI
+  Time now = Simulator :: Now();
+  m_idleTime = uint32_t ((now - m_idleStartTime).GetSeconds ());
   // If Queue::Enqueue fails, QueueDisc::Drop is called by the internal queue
   // because QueueDisc::AddInternalQueue sets the drop callback
 
@@ -262,8 +260,8 @@ PiQueueDisc::InitializeParams (void)
  
   if(m_isSTPI)
    {
-     m_OldThc=0;
-     m_OldThnrc=0;
+     m_oldThc=0;
+     m_oldThnrc=0;
    }
 }
 
@@ -302,12 +300,14 @@ void PiQueueDisc::CalculateP ()
   //Self Tuning PI (STPI)
   if(m_isSTPI)
     {
-      if(m
-      m_Thc = (m_Kc * C) - (m_OldThc * m_Kc);
-      m_Thnrc = (m_Knrc * (std :: sqrt (p/2)) - (m_OldThnrc * m_Knrc);
-      m_Kp = (2 * m_BPI * (std :: sqrt ((m_BPI * m_BPI) + 1)) * m_Thnrc )/(RTT * m_Thc);
-      m_Ki = ((2 * m_Thnrc)/RTT) * m_Kp;
+      m_routerBusyTime = uint32_t (((Simulator :: Now()) - m_idleTime).GetSeconds ());;
+      m_capacity = m_departedPkts/m_routerBusyTime;
+      m_Thc = (m_Kc * m_capacity) - (m_oldThc * m_Kc);
+      m_Thnrc = (m_Knrc * (std :: sqrt (p/2)) - (m_oldThnrc * m_Knrc);
+      m_Kp = (2 * m_BPI * (std :: sqrt ((m_BPI * m_BPI) + 1)) * m_Thnrc )/(50 * m_Thc); //RTT=50
+      m_Ki = ((2 * m_Thnrc)/50) * m_Kp;
       m_departedPkts = 0;
+      m_idleTime=0;
       
       if (GetMode () == Queue::QUEUE_MODE_BYTES)
         {
@@ -351,13 +351,13 @@ PiQueueDisc::DoDequeue ()
     {
       NS_LOG_LOGIC ("Queue empty");
         //Self Tuning PI
-        m_idle=1;
-        m_IdleTime = Simulator::Now();
+        //m_idle=1;
+        m_IdleStartTime = Simulator::Now();
       return 0;
     }
   else
   {
-        m_idle=0;
+       // m_idle=0;
         Ptr<QueueDiscItem> item = StaticCast<QueueDiscItem> (GetInternalQueue (0)->Dequeue ());
         m_departedPKts++;
         return item;
