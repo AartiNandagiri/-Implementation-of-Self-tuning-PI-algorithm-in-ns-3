@@ -129,6 +129,16 @@ TypeId PiQueueDisc::GetTypeId (void)
                   DoubleValue (0),
                   MakeDoubleAccessor (&PiQueueDisc::m_Ki),
                   MakeDoubleChecker<double> ())
+    .AddAttribute("IdleTime",
+                  "Router's idle time",
+                  TimeValue (Seconds (0.0)),
+                  MakeTimeAccessor (&PiQueueDisc::m_idleTime),
+                  MakeTimeChecker ())
+    .AddAttribute("IdleStartTime",
+                  "Router's idle start time",
+                  TimeValue (Seconds (0.0)),
+                  MakeTimeAccessor (&PiQueueDisc::m_idleStartTime),
+                  MakeTimeChecker ())
     
   ;
 
@@ -300,7 +310,7 @@ void PiQueueDisc::CalculateP ()
   //Self Tuning PI (STPI)
   if(m_isSTPI)
     {
-      m_routerBusyTime = uint32_t (((Simulator :: Now()) - m_idleTime).GetSeconds ());;
+      m_routerBusyTime = uint32_t (((Simulator :: Now()) - m_idleTime).GetSeconds ());
       m_capacity = m_departedPkts/m_routerBusyTime;
       m_Thc = (m_Kc * m_capacity) - (m_oldThc * m_Kc);
       m_Thnrc = (m_Knrc * (std :: sqrt (p/2)) - (m_oldThnrc * m_Knrc);
