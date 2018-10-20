@@ -77,31 +77,7 @@ public:
     uint32_t packetsDequeued;
   } Stats;
 
-  enum QueueDiscMode
-  {
-    QUEUE_DISC_MODE_PACKETS,     /**< Use number of packets for maximum queue disc size */
-    QUEUE_DISC_MODE_BYTES,       /**< Use number of bytes for maximum queue disc size */
-  };
-
-  /**
-   * \brief Set the operating mode of this queue.
-   *
-   * \param mode The operating mode of this queue.
-   */
-  void SetMode (QueueDiscMode mode);
-
-  /**
-   * \brief Get the encapsulation mode of this queue.
-   *
-   * \returns The encapsulation mode of this queue.
-   */
-  QueueDiscMode GetMode (void) const;
-
-  /**
-   * \brief Get the current value of the queue in bytes or packets.
-   *
-   * \returns The queue size in bytes or packets.
-   */
+ 
   uint32_t GetQueueSize (void);
 
   /**
