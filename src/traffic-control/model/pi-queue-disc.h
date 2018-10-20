@@ -77,19 +77,25 @@ public:
     uint32_t packetsDequeued;
   } Stats;
 
+  enum QueueDiscMode
+  {
+    QUEUE_DISC_MODE_PACKETS,     /**< Use number of packets for maximum queue disc size */
+    QUEUE_DISC_MODE_BYTES,       /**< Use number of bytes for maximum queue disc size */
+  };
+
   /**
    * \brief Set the operating mode of this queue.
    *
    * \param mode The operating mode of this queue.
    */
-  void SetMode (Queue::QueueMode mode);
+  void SetMode (QueueDiscMode mode);
 
   /**
    * \brief Get the encapsulation mode of this queue.
    *
    * \returns The encapsulation mode of this queue.
    */
-  Queue::QueueMode GetMode (void);
+  QueueDiscMode GetMode (void) const;
 
   /**
    * \brief Get the current value of the queue in bytes or packets.
@@ -103,7 +109,7 @@ public:
    *
    * \param lim The limit in bytes or packets.
    */
-  void SetQueueLimit (double lim);
+  void SetQueueLimit (uint32_t lim);
 
   /**
    * \brief Get PI statistics after running.
@@ -157,7 +163,7 @@ private:
   Stats m_stats;                                //!< PI statistics
 
   // ** Variables supplied by user
-  Queue::QueueMode m_mode;                      //!< Mode (bytes or packets)
+  //Queue::QueueMode m_mode;                      //!< Mode (bytes or packets)
   double m_queueLimit;                          //!< Queue limit in bytes / packets
   uint32_t m_meanPktSize;                       //!< Average packet size in bytes
   double m_qRef;                                //!< Desired queue size
