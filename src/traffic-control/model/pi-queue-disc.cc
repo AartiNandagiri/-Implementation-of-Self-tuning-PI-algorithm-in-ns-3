@@ -99,12 +99,12 @@ TypeId PiQueueDisc::GetTypeId (void)
                   MakeDoubleChecker<double> ())
     .AddAttribute("Kc",
                   "Filter time constant to smoothen capacity",
-                  DoubleValue (5),
+                  DoubleValue (0.5),
                   MakeDoubleAccessor (&PiQueueDisc::m_Kc),
                   MakeDoubleChecker<double> ())
     .AddAttribute("Knrc",
                   "Filter time constant to smoothen N/R*C",
-                  DoubleValue (10),
+                  DoubleValue (0.5),
                   MakeDoubleAccessor (&PiQueueDisc::m_Knrc),
                   MakeDoubleChecker<double> ())
     .AddAttribute("BPI",
@@ -318,8 +318,8 @@ void PiQueueDisc::CalculateP ()
     {
       m_routerBusyTime = uint32_t (((Simulator :: Now()) - m_idleTime).GetSeconds ());
       m_capacity = m_departedPkts/m_routerBusyTime;
-      m_Thc = (m_Kc * m_capacity) - (m_oldThc * m_Kc);
-      m_Thnrc = (m_Knrc * (std :: sqrt (p/2))) - (m_oldThnrc * m_Knrc);
+      m_Thc = ((m_oldThc * (1 - m_Kc)) + (m_Kc * m_capacity));
+      m_Thnrc = (m_oldThnrc *(1- m_Knrc) + (m_Knrc * (std :: sqrt (p/2)))) ;
       m_Kp = (2 * m_BPI * (std :: sqrt ((m_BPI * m_BPI) + 1)) * m_Thnrc )/(50 * m_Thc); //RTT=50
       m_Ki = ((2 * m_Thnrc)/50) * m_Kp;
       m_departedPkts = 0;
