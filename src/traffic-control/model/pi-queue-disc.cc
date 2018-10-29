@@ -122,6 +122,11 @@ TypeId PiQueueDisc::GetTypeId (void)
                   DoubleValue (0),
                   MakeDoubleAccessor (&PiQueueDisc::m_Thnrc),
                   MakeDoubleChecker<double> ())
+    .AddAttribute("rtt",
+                  "estimated round trip time",
+                  DoubleValue (0),
+                  MakeDoubleAccessor (&PiQueueDisc::m_rtt),
+                  MakeDoubleChecker<double> ())
     .AddAttribute("Kp",
                   "PI parameter",
                   DoubleValue (0),
@@ -316,15 +321,16 @@ void PiQueueDisc::CalculateP ()
   //Self Tuning PI (STPI)
   if(m_isSTPI)
     {
-      m_routerBusyTime = uint32_t (((Simulator :: Now()) - m_idleTime).GetSeconds ());
+      m_routerBusyTime = uint32_t ((((Simulator :: Now()) - m_oldRoutBusyTime) - m_idleTime).GetSeconds ());
       m_capacity = m_departedPkts/m_routerBusyTime;
       m_Thc = ((m_oldThc * (1 - m_Kc)) + (m_Kc * m_capacity));
       m_Thnrc = (m_oldThnrc *(1- m_Knrc) + (m_Knrc * (std :: sqrt (p/2)))) ;
-      m_Kp = (2 * m_BPI * (std :: sqrt ((m_BPI * m_BPI) + 1)) * m_Thnrc )/(50 * m_Thc); //RTT=50
-      m_Ki = ((2 * m_Thnrc)/50) * m_Kp;
+      m_rtt = (((m_Thnrc / m_Thc)) / (std :: sqrt (p/2)));
+      m_Kp = (2 * m_BPI * (std :: sqrt ((m_BPI * m_BPI) + 1)) * m_Thnrc )/(m_rtt * m_Thc); 
+      m_Ki = ((2 * m_Thnrc)/m_rtt) * m_Kp;
       m_departedPkts = 0;
       m_idleTime = NanoSeconds (0);
-      
+      m_oldRoutBusyTime = Simulator :: Now(); 
       if (GetMaxSize ().GetUnit () == QueueSizeUnit::BYTES)
         {
           p = m_Ki * ((qlen * 1.0 / m_meanPktSize) - m_qRef) + m_Kp * (qlen * 1.0 / m_meanPktSize);

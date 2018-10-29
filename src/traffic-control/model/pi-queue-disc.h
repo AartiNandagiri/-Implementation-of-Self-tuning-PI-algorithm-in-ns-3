@@ -163,6 +163,8 @@ private:
   double m_Thnrc;                               //!< Smoothened estimate of N/R*C
   double m_oldThc;                              //!< old Smoothened estimate of Capacity
   double m_oldThnrc;                            //!< old Smoothened estimate of N/R*C
+  Time m_oldRoutBusyTime;                       //!< Router's old busy time
+  double m_rtt;                                 //!< estimated round trip time
   double m_Kp;                                  //!< PI parameter
   double m_Ki;                                  //!< PI parameter
   Time m_idleTime;                              //!< Router's idle Time
