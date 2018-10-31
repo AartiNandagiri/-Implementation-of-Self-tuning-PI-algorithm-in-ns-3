@@ -138,6 +138,11 @@ TypeId PiQueueDisc::GetTypeId (void)
                    TimeValue (Seconds (0.0)),
                    MakeTimeAccessor (&PiQueueDisc::m_idleStartTime),
                    MakeTimeChecker ())
+    .AddAttribute ("UseEcn",
+                   "True to use ECN (packets are marked instead of being dropped)",
+                   BooleanValue (false),
+                   MakeBooleanAccessor (&PiQueueDisc::m_useEcn),
+                   MakeBooleanChecker ())
 
   ;
 
@@ -203,20 +208,44 @@ PiQueueDisc::DoEnqueue (Ptr<QueueDiscItem> item)
   NS_LOG_FUNCTION (this << item);
 
   uint32_t nQueued = GetQueueSize ();
+
+  uint32_t dropType = DTYPE_NONE;
   if ((nQueued >= m_queueLimit)
       || (nQueued + item->GetSize () > m_queueLimit))
     {
       // Drops due to queue limit: reactive
-      DropBeforeEnqueue (item, "FORCED_DROP");
+      DropBeforeEnqueue (item, FORCED_DROP);
+      dropType = DTYPE_FORCED;
       m_stats.forcedDrop++;
       return false;
     }
   else if (DropEarly (item, nQueued))
     {
       // Early probability drop: proactive
-      DropBeforeEnqueue (item, "UNFORCED_DROP");
+      DropBeforeEnqueue (item, UNFORCED_DROP);
+      dropType = DTYPE_UNFORCED;
       m_stats.unforcedDrop++;
       return false;
+    }
+   if (dropType == DTYPE_UNFORCED)
+    {
+      if (!m_useEcn || !Mark (item, UNFORCED_MARK))
+        {
+          NS_LOG_DEBUG ("\t Dropping due to Prob Mark ");
+          DropBeforeEnqueue (item, UNFORCED_DROP);
+          return false;
+        }
+      NS_LOG_DEBUG ("\t Marking due to Prob Mark ");
+    }
+  else if (dropType == DTYPE_FORCED)
+    {
+      if (!m_useEcn || !Mark (item, FORCED_MARK))
+        {
+          NS_LOG_DEBUG ("\t Dropping due to Forced Mark ");
+          DropBeforeEnqueue (item, FORCED_DROP);
+          return false;
+        }
+      NS_LOG_DEBUG ("\t Marking due to Forced Mark ");
     }
 
   // No drop
