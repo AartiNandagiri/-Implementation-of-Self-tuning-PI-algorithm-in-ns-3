@@ -77,7 +77,7 @@ public:
     uint32_t packetsDequeued;
   } Stats;
 
- 
+
   uint32_t GetQueueSize (void);
 
   /**
@@ -152,7 +152,7 @@ private:
   uint32_t m_qOld;                              //!< Old value of queue length
   EventId m_rtrsEvent;                          //!< Event used to decide the decision of interval of drop probability calculation
   Ptr<UniformRandomVariable> m_uv;              //!< Rng stream
-  
+
   // **Self Tuning PI
   bool m_isSTPI;                                //!< To enable STPI
   double m_capacity;                            //!< link capacity
@@ -171,10 +171,10 @@ private:
   Time m_idleStartTime;                         //!< Router's idle Start Time
   uint32_t m_routerBusyTime;                    //!< Router's Busy Time
   uint32_t m_departedPkts;                      //!< No. of departed packets since the last probability calculation
-  
-  
+
+
 };
 
-};   // namespace ns3
+}    // namespace ns3
 
 #endif
