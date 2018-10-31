@@ -76,7 +76,16 @@ public:
     uint32_t forcedDrop;        //!< Drops due to queue limit: reactive
     uint32_t packetsDequeued;
   } Stats;
-
+        
+  /** 
+   * \brief Drop types
+   */
+  enum
+  {
+    DTYPE_NONE,        //!< Ok, no drop
+    DTYPE_FORCED,      //!< A "forced" drop
+    DTYPE_UNFORCED,    //!< An "unforced" (random) drop
+  };
 
   uint32_t GetQueueSize (void);
 
@@ -103,6 +112,13 @@ public:
    * \return the number of stream indices assigned by this model
    */
   int64_t AssignStreams (int64_t stream);
+   
+  // Reasons for dropping packets
+  static constexpr const char* UNFORCED_DROP = "Unforced drop";  //!< Early probability drops
+  static constexpr const char* FORCED_DROP = "Forced drop";      //!< Forced drop
+  // Reasons for marking packets
+  static constexpr const char* UNFORCED_MARK = "Unforced mark";  //!< Early probability marks
+  static constexpr const char* FORCED_MARK = "Forced mark";      //!< Forced mark
 
 protected:
   /**
@@ -154,6 +170,8 @@ private:
   Ptr<UniformRandomVariable> m_uv;              //!< Rng stream
 
   // **Self Tuning PI
+  bool m_useEcn;                                //!< True if ECN is used (packets are marked instead of being dropped)
+
   bool m_isSTPI;                                //!< To enable STPI
   double m_capacity;                            //!< link capacity
   double m_Kc;                                  //!< filter time constant to smoothen capacity
