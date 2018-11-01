@@ -220,7 +220,7 @@ PiQueueDisc::DoEnqueue (Ptr<QueueDiscItem> item)
       || (nQueued + item->GetSize () > m_queueLimit))
     {
       // Drops due to queue limit: reactive
-      DropBeforeEnqueue (item, FORCED_DROP);
+      //DropBeforeEnqueue (item, FORCED_DROP);
       dropType = DTYPE_FORCED;
       m_stats.forcedDrop++;
       return false;
@@ -228,7 +228,7 @@ PiQueueDisc::DoEnqueue (Ptr<QueueDiscItem> item)
   else if (DropEarly (item, nQueued))
     {
       // Early probability drop: proactive
-      DropBeforeEnqueue (item, UNFORCED_DROP);
+      //DropBeforeEnqueue (item, UNFORCED_DROP);
       dropType = DTYPE_UNFORCED;
       m_stats.unforcedDrop++;
       return false;
