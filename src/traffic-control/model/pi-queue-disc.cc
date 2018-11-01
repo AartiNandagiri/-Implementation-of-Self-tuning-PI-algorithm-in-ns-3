@@ -77,6 +77,12 @@ TypeId PiQueueDisc::GetTypeId (void)
                    DoubleValue (50),
                    MakeDoubleAccessor (&PiQueueDisc::SetQueueLimit),
                    MakeDoubleChecker<double> ())
+    .AddAttribute ("MaxSize",
+                   "The maximum number of packets accepted by this queue disc",
+                   QueueSizeValue (QueueSize ("25p")),
+                   MakeQueueSizeAccessor (&QueueDisc::SetMaxSize,
+                                          &QueueDisc::GetMaxSize),
+                   MakeQueueSizeChecker ())
     //Self Tuning PI
     .AddAttribute ("STPI",
                    "True to enable Self Tuning PI",
@@ -252,12 +258,12 @@ PiQueueDisc::DoEnqueue (Ptr<QueueDiscItem> item)
   bool retval = GetInternalQueue (0)->Enqueue (item);
 
   //Self Tuning PI
-  if (m_idle == 1)
+  if (m_idle)
     {
       Time now = Simulator :: Now ();
       m_idleTime = (now - m_idleStartTime);
     }
-  m_idle = 0;
+  m_idle = false;
   // If Queue::Enqueue fails, QueueDisc::Drop is called by the internal queue
   // because QueueDisc::AddInternalQueue sets the drop callback
 
@@ -280,7 +286,7 @@ PiQueueDisc::InitializeParams (void)
     {
       m_oldThc = 0;
       m_oldThnrc = 0;
-      m_idle = 1;
+      m_idle = true;
     }
 }
 
@@ -374,7 +380,7 @@ PiQueueDisc::DoDequeue ()
       NS_LOG_LOGIC ("Queue empty");
       //Self-Tuning PI
       m_idleStartTime = Simulator::Now ();
-      m_idle = 1;
+      m_idle = true;
       return 0;
     }
   else

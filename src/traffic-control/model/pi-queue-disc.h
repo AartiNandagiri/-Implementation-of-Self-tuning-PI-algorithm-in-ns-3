@@ -171,7 +171,7 @@ private:
 
   // **Self Tuning PI
   bool m_useEcn;                                //!< True if ECN is used (packets are marked instead of being dropped)
-
+  bool m_idle;                                  //!< Idle status
   bool m_isSTPI;                                //!< To enable STPI
   double m_capacity;                            //!< link capacity
   double m_Kc;                                  //!< filter time constant to smoothen capacity
@@ -187,7 +187,6 @@ private:
   double m_Ki;                                  //!< PI parameter
   Time m_idleTime;                              //!< Router's idle Time
   Time m_idleStartTime;                         //!< Router's idle Start Time
-  uint32_t m_idle;                              //!< 0/1 idle status
   uint32_t m_routerBusyTime;                    //!< Router's Busy Time
   uint32_t m_departedPkts;                      //!< No. of departed packets since the last probability calculation
 
