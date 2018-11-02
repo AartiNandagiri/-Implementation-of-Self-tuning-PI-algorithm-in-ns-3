@@ -79,7 +79,7 @@ TypeId PiQueueDisc::GetTypeId (void)
                    MakeDoubleChecker<double> ())
     .AddAttribute ("MaxSize",
                    "The maximum number of packets accepted by this queue disc",
-                   QueueSizeValue (QueueSize ("25p")),
+                   QueueSizeValue (QueueSize ("0p")),
                    MakeQueueSizeAccessor (&QueueDisc::SetMaxSize,
                                           &QueueDisc::GetMaxSize),
                    MakeQueueSizeChecker ())
@@ -213,47 +213,24 @@ PiQueueDisc::DoEnqueue (Ptr<QueueDiscItem> item)
 {
   NS_LOG_FUNCTION (this << item);
 
-  uint32_t nQueued = GetQueueSize ();
+  QueueSize nQueued = GetCurrentSize ();
 
-  uint32_t dropType = DTYPE_NONE;
-  if ((nQueued >= m_queueLimit)
-      || (nQueued + item->GetSize () > m_queueLimit))
+  if (nQueued + item > GetMaxSize ())
     {
       // Drops due to queue limit: reactive
-      //DropBeforeEnqueue (item, FORCED_DROP);
-      dropType = DTYPE_FORCED;
-      m_stats.forcedDrop++;
+      DropBeforeEnqueue (item, FORCED_DROP);
       return false;
     }
-  else if (DropEarly (item, nQueued))
-    {
-      // Early probability drop: proactive
-      //DropBeforeEnqueue (item, UNFORCED_DROP);
-      dropType = DTYPE_UNFORCED;
-      m_stats.unforcedDrop++;
-      return false;
-    }
-   if (dropType == DTYPE_UNFORCED)
+  else if (DropEarly (item, nQueued.GetValue ()))
     {
       if (!m_useEcn || !Mark (item, UNFORCED_MARK))
         {
-          NS_LOG_DEBUG ("\t Dropping due to Prob Mark ");
+          // Early probability drop: proactive
           DropBeforeEnqueue (item, UNFORCED_DROP);
           return false;
         }
-      NS_LOG_DEBUG ("\t Marking due to Prob Mark ");
     }
-  else if (dropType == DTYPE_FORCED)
-    {
-      if (!m_useEcn || !Mark (item, FORCED_MARK))
-        {
-          NS_LOG_DEBUG ("\t Dropping due to Forced Mark ");
-          DropBeforeEnqueue (item, FORCED_DROP);
-          return false;
-        }
-      NS_LOG_DEBUG ("\t Marking due to Forced Mark ");
-    }
-
+  
   // No drop
   bool retval = GetInternalQueue (0)->Enqueue (item);
 
@@ -323,14 +300,14 @@ void PiQueueDisc::CalculateP ()
   double p = 0.0;
   uint32_t qlen = GetQueueSize ();
 
-  //Self Tuning PI (STPI)
+  // Self Tuning PI (STPI)
   if (m_isSTPI)
     {
       m_routerBusyTime = uint32_t ((((Simulator :: Now ()) - m_oldRoutBusyTime) - m_idleTime).GetSeconds ());
       m_capacity = m_departedPkts / m_routerBusyTime;
       m_Thc = ((m_oldThc * (1 - m_Kc)) + (m_Kc * m_capacity));
-      m_Thnrc = (m_oldThnrc * (1 - m_Knrc) + (m_Knrc * (std :: sqrt (p / 2))));
-      m_rtt = (((m_Thnrc / m_Thc)) / (std :: sqrt (p / 2)));
+      m_Thnrc = (m_oldThnrc * (1 - m_Knrc) + (m_Knrc * (std :: sqrt (m_dropProb / 2))));
+      m_rtt = (((m_Thnrc / m_Thc)) / (std :: sqrt (m_dropProb / 2)));
       m_Kp = (2 * m_BPI * (std :: sqrt ((m_BPI * m_BPI) + 1)) * m_Thnrc ) / (m_rtt * m_Thc);
       m_Ki = ((2 * m_Thnrc) / m_rtt) * m_Kp;
       m_departedPkts = 0;
@@ -339,7 +316,6 @@ void PiQueueDisc::CalculateP ()
       if (GetMaxSize ().GetUnit () == QueueSizeUnit::BYTES)
         {
           p = m_Ki * ((qlen * 1.0 / m_meanPktSize) - m_qRef) + m_Kp * (qlen * 1.0 / m_meanPktSize);
-
         }
       else
         {
@@ -348,10 +324,11 @@ void PiQueueDisc::CalculateP ()
 
     }
 
-  //PI
+  // PI
   else
     {
       if (GetMaxSize ().GetUnit () == QueueSizeUnit::BYTES)
+
         {
           p = m_a * ((qlen * 1.0 / m_meanPktSize) - m_qRef) - m_b * ((m_qOld * 1.0 / m_meanPktSize) - m_qRef) + m_dropProb;
         }
