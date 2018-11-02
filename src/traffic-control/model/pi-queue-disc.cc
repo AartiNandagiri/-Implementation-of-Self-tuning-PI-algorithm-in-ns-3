@@ -126,12 +126,12 @@ TypeId PiQueueDisc::GetTypeId (void)
                    MakeDoubleChecker<double> ())
     .AddAttribute ("Kp",
                    "PI parameter",
-                   DoubleValue (0),
+                   DoubleValue (0.00001816),
                    MakeDoubleAccessor (&PiQueueDisc::m_Kp),
                    MakeDoubleChecker<double> ())
     .AddAttribute ("Ki",
                    "PI parameter",
-                   DoubleValue (0),
+                   DoubleValue (0.00001822),
                    MakeDoubleAccessor (&PiQueueDisc::m_Ki),
                    MakeDoubleChecker<double> ())
     .AddAttribute ("IdleTime",
@@ -264,6 +264,7 @@ PiQueueDisc::InitializeParams (void)
       m_oldThc = 0;
       m_oldThnrc = 0;
       m_idle = true;
+      m_oldRoutBusyTime = NanoSeconds (0);
     }
 }
 
@@ -301,18 +302,26 @@ void PiQueueDisc::CalculateP ()
   uint32_t qlen = GetQueueSize ();
 
   // Self Tuning PI (STPI)
+  
+  //Self Tuning PI (STPI)
   if (m_isSTPI)
     {
       m_routerBusyTime = uint32_t ((((Simulator :: Now ()) - m_oldRoutBusyTime) - m_idleTime).GetSeconds ());
-      m_capacity = m_departedPkts / m_routerBusyTime;
-      m_Thc = ((m_oldThc * (1 - m_Kc)) + (m_Kc * m_capacity));
-      m_Thnrc = (m_oldThnrc * (1 - m_Knrc) + (m_Knrc * (std :: sqrt (m_dropProb / 2))));
-      m_rtt = (((m_Thnrc / m_Thc)) / (std :: sqrt (m_dropProb / 2)));
-      m_Kp = (2 * m_BPI * (std :: sqrt ((m_BPI * m_BPI) + 1)) * m_Thnrc ) / (m_rtt * m_Thc);
-      m_Ki = ((2 * m_Thnrc) / m_rtt) * m_Kp;
-      m_departedPkts = 0;
-      m_idleTime = NanoSeconds (0);
-      m_oldRoutBusyTime = Simulator :: Now ();
+      if(m_routerBusyTime != NanoSeconds (0))
+      {
+        m_capacity = m_departedPkts / (m_routerBusyTime);
+        m_Thc = ((m_oldThc * (1 - m_Kc)) + (m_Kc * m_capacity));
+        if(m_dropProb!=0)
+        {
+                m_Thnrc = (m_oldThnrc * (1 - m_Knrc) + (m_Knrc * (std :: sqrt (m_dropProb / 2))));
+                m_rtt = (((m_Thnrc / m_Thc)) / (std :: sqrt (m_dropProb / 2)));
+                m_Kp = (2 * m_BPI * (std :: sqrt ((m_BPI * m_BPI) + 1)) * m_Thnrc ) / (m_rtt * m_Thc);
+                m_Ki = ((2 * m_Thnrc) / m_rtt) * m_Kp;
+        }
+      }
+        m_departedPkts = 0;
+        m_idleTime = NanoSeconds (0);
+        m_oldRoutBusyTime = Simulator :: Now ();
       if (GetMaxSize ().GetUnit () == QueueSizeUnit::BYTES)
         {
           p = m_Ki * ((qlen * 1.0 / m_meanPktSize) - m_qRef) + m_Kp * (qlen * 1.0 / m_meanPktSize);
