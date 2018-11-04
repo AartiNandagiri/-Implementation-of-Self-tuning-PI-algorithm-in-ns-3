@@ -76,8 +76,8 @@ public:
     uint32_t forcedDrop;        //!< Drops due to queue limit: reactive
     uint32_t packetsDequeued;
   } Stats;
-        
-  /** 
+
+  /**
    * \brief Drop types
    */
   enum
@@ -112,7 +112,7 @@ public:
    * \return the number of stream indices assigned by this model
    */
   int64_t AssignStreams (int64_t stream);
-   
+
   // Reasons for dropping packets
   static constexpr const char* UNFORCED_DROP = "Unforced drop";  //!< Early probability drops
   static constexpr const char* FORCED_DROP = "Forced drop";      //!< Forced drop
@@ -174,17 +174,17 @@ private:
   bool m_idle;                                  //!< Idle status
   bool m_isSTPI;                                //!< To enable STPI
   double m_capacity;                            //!< link capacity
-  double m_Kc;                                  //!< filter time constant to smoothen capacity
-  double m_Knrc;                                //!< filter time constant to smoothen N/R*C
-  double m_BPI;                                 //!< controls AQM Responsiveness
-  double m_Thc;                                 //!< Smoothened estimate of Capacity
-  double m_Thnrc;                               //!< Smoothened estimate of N/R*C
+  double m_kc;                                  //!< filter time constant to smoothen capacity
+  double m_knrc;                                //!< filter time constant to smoothen N/R*C
+  double m_bpi;                                 //!< controls AQM Responsiveness
+  double m_thc;                                 //!< Smoothened estimate of Capacity
+  double m_thnrc;                               //!< Smoothened estimate of N/R*C
   double m_oldThc;                              //!< old Smoothened estimate of Capacity
   double m_oldThnrc;                            //!< old Smoothened estimate of N/R*C
   Time m_oldRoutBusyTime;                       //!< Router's old busy time
   double m_rtt;                                 //!< estimated round trip time
-  double m_Kp;                                  //!< PI parameter
-  double m_Ki;                                  //!< PI parameter
+  double m_kp;                                  //!< PI parameter
+  double m_ki;                                  //!< PI parameter
   Time m_idleTime;                              //!< Router's idle Time
   Time m_idleStartTime;                         //!< Router's idle Start Time
   uint32_t m_routerBusyTime;                    //!< Router's Busy Time
