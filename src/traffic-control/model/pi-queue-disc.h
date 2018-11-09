@@ -28,6 +28,9 @@
 #ifndef PI_QUEUE_DISC_H
 #define PI_QUEUE_DISC_H
 
+#include <iostream>
+#include <string>
+#include <fstream>
 #include <queue>
 #include "ns3/packet.h"
 #include "ns3/queue-disc.h"
@@ -170,6 +173,9 @@ private:
   Ptr<UniformRandomVariable> m_uv;              //!< Rng stream
 
   // **Self Tuning PI
+  
+  std::ofstream myfile;
+  
   bool m_useEcn;                                //!< True if ECN is used (packets are marked instead of being dropped)
   bool m_idle;                                  //!< Idle status
   bool m_isSTPI;                                //!< To enable STPI
@@ -185,9 +191,10 @@ private:
   double m_rtt;                                 //!< estimated round trip time
   double m_kp;                                  //!< PI parameter
   double m_ki;                                  //!< PI parameter
-  Time m_idleTime;                              //!< Router's idle Time
+  Time m_totalIdleTime;                         //!< Router's total idle Time
   Time m_idleStartTime;                         //!< Router's idle Start Time
-  uint32_t m_routerBusyTime;                    //!< Router's Busy Time
+  Time m_idleEndTime;                           //!< Router's idle Start Time
+  double m_routerBusyTime;                    //!< Router's Busy Time
   uint32_t m_departedPkts;                      //!< No. of departed packets since the last probability calculation
 
 

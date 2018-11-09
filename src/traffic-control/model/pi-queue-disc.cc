@@ -24,7 +24,9 @@
  * PORT NOTE: This code was ported from ns-2.36rc1 (queue/pi.cc).
  * Most of the comments are also ported from the same.
  */
-
+#include <iostream>
+#include <string>
+#include <fstream>
 #include "ns3/log.h"
 #include "ns3/enum.h"
 #include "ns3/uinteger.h"
@@ -79,7 +81,7 @@ TypeId PiQueueDisc::GetTypeId (void)
                    MakeDoubleChecker<double> ())
     .AddAttribute ("MaxSize",
                    "The maximum number of packets accepted by this queue disc",
-                   QueueSizeValue (QueueSize ("0p")),
+                   QueueSizeValue (QueueSize ("500p")),
                    MakeQueueSizeAccessor (&QueueDisc::SetMaxSize,
                                           &QueueDisc::GetMaxSize),
                    MakeQueueSizeChecker ())
@@ -91,7 +93,7 @@ TypeId PiQueueDisc::GetTypeId (void)
                    MakeBooleanChecker ())
     .AddAttribute ("LinkCapacity",
                    "The STPI Link Capacity",
-                   DoubleValue (622),
+                   DoubleValue (0),
                    MakeDoubleAccessor (&PiQueueDisc::m_capacity),
                    MakeDoubleChecker<double> ())
     .AddAttribute ("Kc",
@@ -198,6 +200,21 @@ PiQueueDisc::DoEnqueue (Ptr<QueueDiscItem> item)
 
   QueueSize nQueued = GetCurrentSize ();
 
+  if (m_idle)
+    {
+      Time m_idleEndTime = Simulator :: Now ();
+      m_totalIdleTime += (m_idleEndTime - m_idleStartTime);
+
+      //myfile.open ("results/gfc-dumbbell/stpi-stats4.txt", std::fstream::in | std::fstream::out | std::fstream::app);
+      //myfile << "idle End time" << m_idleEndTime <<" idle start time " << m_idleStartTime << "total idle time " << m_totalIdleTime << "\n";
+      //myfile << "\n";
+      //myfile.close ();
+      m_idleEndTime = NanoSeconds (0);
+      m_idleStartTime = NanoSeconds (0);
+      m_idle = false;
+    }
+
+
   if (nQueued + item > GetMaxSize ())
     {
       // Drops due to queue limit: reactive
@@ -218,12 +235,7 @@ PiQueueDisc::DoEnqueue (Ptr<QueueDiscItem> item)
   bool retval = GetInternalQueue (0)->Enqueue (item);
 
   //Self Tuning PI
-  if (m_idle)
-    {
-      Time now = Simulator :: Now ();
-      m_idleTime = (now - m_idleStartTime);
-    }
-  m_idle = false;
+
   // If Queue::Enqueue fails, QueueDisc::Drop is called by the internal queue
   // because QueueDisc::AddInternalQueue sets the drop callback
 
@@ -245,6 +257,9 @@ PiQueueDisc::InitializeParams (void)
       m_oldThc = 0;
       m_oldThnrc = 0;
       m_idle = true;
+      m_idleStartTime = NanoSeconds (0);
+      m_idleEndTime = NanoSeconds (0);
+      m_totalIdleTime = NanoSeconds (0);
       m_oldRoutBusyTime = NanoSeconds (0);
     }
 }
@@ -285,31 +300,70 @@ void PiQueueDisc::CalculateP ()
   //Self Tuning PI (STPI)
   if (m_isSTPI)
     {
-      m_routerBusyTime = uint32_t ((((Simulator :: Now ()) - m_oldRoutBusyTime) - m_idleTime).GetSeconds ());
-      if (m_routerBusyTime != NanoSeconds (0))
+      if (m_idle)
         {
-          m_capacity = m_departedPkts / (m_routerBusyTime);
-          m_thc = ((m_oldThc * (1 - m_kc)) + (m_kc * m_capacity));
-          if (m_dropProb != 0)
+          m_idleEndTime = Simulator :: Now ();
+          m_totalIdleTime += (m_idleEndTime - m_idleStartTime);
+          m_idleEndTime = NanoSeconds (0);
+          m_idleStartTime = NanoSeconds (0);
+        }
+
+      m_rtt = 0.0025 / 1000.0;
+      m_thc = 5000000.0;
+      m_routerBusyTime = double (((Seconds (1.0 / m_w)) - ((m_totalIdleTime))).GetSeconds ());
+      if (m_routerBusyTime > 0)
+        {
+          //m_capacity = (m_departedPkts * m_meanPktSize * 8.0) / (m_routerBusyTime);
+          //m_thc = ((m_oldThc * (1 - m_kc)) + (m_kc * m_capacity));
+
+          // m_rtt = 0.0025 / 1000.0;
+          if (m_dropProb > 0)
             {
-              m_thnrc = (m_oldThnrc * (1 - m_knrc) + (m_knrc * (std :: sqrt (m_dropProb / 2))));
-              m_rtt = (((m_thnrc / m_thc)) / (std :: sqrt (m_dropProb / 2)));
+              m_thnrc = ((m_oldThnrc * (1 - m_knrc)) + (m_knrc * (std :: sqrt (m_dropProb / 2))));
+              //m_rtt = (((m_thnrc / m_thc)) / (std :: sqrt (m_dropProb / 2)));
               m_kp = (2 * m_bpi * (std :: sqrt ((m_bpi * m_bpi) + 1)) * m_thnrc ) / (m_rtt * m_thc);
               m_ki = ((2 * m_thnrc) / m_rtt) * m_kp;
             }
         }
-      m_departedPkts = 0;
-      m_idleTime = NanoSeconds (0);
-      m_oldRoutBusyTime = Simulator :: Now ();
+
       if (GetMaxSize ().GetUnit () == QueueSizeUnit::BYTES)
         {
-          p = m_ki * ((qlen * 1.0 / m_meanPktSize) - m_qRef) + m_kp * (qlen * 1.0 / m_meanPktSize);
+          p = (m_ki * (qlen * 1.0 / m_meanPktSize) - m_qRef) + (m_kp * (qlen * 1.0 / m_meanPktSize));
+          //p = (m_ki * ((qlen * 1.0 / m_meanPktSize) - m_qRef)) - (m_kp * ((m_qOld * 1.0 / m_meanPktSize) - m_qRef)) + m_dropProb;
+
         }
       else
         {
-          p = m_ki * (qlen - m_qRef) + m_kp * qlen;
+          p = (m_ki * (qlen - m_qRef)) + (m_kp * qlen);
+          //p = (m_ki * (qlen - m_qRef)) - (m_kp * (m_qOld - m_qRef)) + m_dropProb;
+        }
+      m_idleStartTime = NanoSeconds (0);
+      m_idleEndTime = NanoSeconds (0);
+      if (m_idle)
+        {
+          m_idleStartTime = Simulator :: Now ();
         }
 
+      myfile.open ("results/gfc-dumbbell/stpi-stats10.txt", std::fstream::in | std::fstream::out | std::fstream::app);
+      //myfile << "total idle time " << m_totalIdleTime << "\n";
+      m_departedPkts = 0;
+
+      //m_oldRoutBusyTime = Simulator :: Now ();
+      m_oldThnrc = m_thnrc;
+      m_oldThc = m_thc;
+
+      //myfile << "Router's Busy Time " << m_routerBusyTime << "\n";
+      //myfile << "Thc " << m_thc << "\n";
+      //myfile << "Capacity " << m_capacity << "\n";
+      /*myfile << "Thnrc " << m_thnrc << "\n";
+      myfile << "rtt  " << m_rtt << "\n";
+      myfile << "Kp " << m_kp << "\n";
+      myfile << "Ki " << m_ki << "\n";
+      myfile << "qlen " << qlen << "\n";
+      myfile << "qRef " << m_qRef << "\n";
+      myfile << "estimatedDropProb " << p << "\n";*/
+      //myfile << "Seconds(1.0 / m_w) " << Seconds(1.0 / m_w) << "\n";
+      //myfile << "subtraction " << ((Seconds(1.0 / m_w)) - ((m_totalIdleTime))).GetSeconds ()<<"\n";
     }
 
   // PI
@@ -328,7 +382,11 @@ void PiQueueDisc::CalculateP ()
   p = (p < 0) ? 0 : p;
   p = (p > 1) ? 1 : p;
 
+  myfile << "dropProb " << p << "\n";
+  myfile << "\n" << "\n";
+  myfile.close ();
   m_dropProb = p;
+  m_totalIdleTime = NanoSeconds (0);
   m_qOld = qlen;
   m_rtrsEvent = Simulator::Schedule (Time (Seconds (1.0 / m_w)), &PiQueueDisc::CalculateP, this);
 
@@ -340,20 +398,25 @@ PiQueueDisc::DoDequeue ()
 {
   NS_LOG_FUNCTION (this);
 
-  if (GetInternalQueue (0)->IsEmpty ())
+  if (!GetInternalQueue (0)->IsEmpty ())
     {
-      NS_LOG_LOGIC ("Queue empty");
-      //Self-Tuning PI
-      m_idleStartTime = Simulator::Now ();
-      m_idle = true;
-      return 0;
-    }
-  else
-    {
-
+      m_idle = false;
       Ptr<QueueDiscItem> item = StaticCast<QueueDiscItem> (GetInternalQueue (0)->Dequeue ());
       m_departedPkts++;
       return item;
+    }
+  else
+    {
+      NS_LOG_LOGIC ("Queue empty");
+      //Self-Tuning PI
+      m_idle = true;
+      m_idleStartTime = Simulator::Now ();
+      //myfile.open ("results/gfc-dumbbell/stpi-stats4.txt", std::fstream::in | std::fstream::out | std::fstream::app);
+      //myfile << "idle start time " << m_idleStartTime << "\n";
+      //myfile << "\n";
+      //myfile.close ();
+
+      return 0;
     }
 }
 
