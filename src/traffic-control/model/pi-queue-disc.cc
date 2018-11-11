@@ -24,7 +24,9 @@
  * PORT NOTE: This code was ported from ns-2.36rc1 (queue/pi.cc).
  * Most of the comments are also ported from the same.
  */
-
+#include <iostream>
+#include <string>
+#include <fstream>
 #include "ns3/log.h"
 #include "ns3/enum.h"
 #include "ns3/uinteger.h"
@@ -79,7 +81,7 @@ TypeId PiQueueDisc::GetTypeId (void)
                    MakeDoubleChecker<double> ())
     .AddAttribute ("MaxSize",
                    "The maximum number of packets accepted by this queue disc",
-                   QueueSizeValue (QueueSize ("0p")),
+                   QueueSizeValue (QueueSize ("500p")),
                    MakeQueueSizeAccessor (&QueueDisc::SetMaxSize,
                                           &QueueDisc::GetMaxSize),
                    MakeQueueSizeChecker ())
@@ -91,7 +93,7 @@ TypeId PiQueueDisc::GetTypeId (void)
                    MakeBooleanChecker ())
     .AddAttribute ("LinkCapacity",
                    "The STPI Link Capacity",
-                   DoubleValue (622),
+                   DoubleValue (0),
                    MakeDoubleAccessor (&PiQueueDisc::m_capacity),
                    MakeDoubleChecker<double> ())
     .AddAttribute ("Kc",
@@ -182,7 +184,6 @@ PiQueueDisc::GetQueueSize (void)
   return GetInternalQueue (0)->GetCurrentSize ().GetValue ();
 }
 
-
 int64_t
 PiQueueDisc::AssignStreams (int64_t stream)
 {
@@ -197,6 +198,16 @@ PiQueueDisc::DoEnqueue (Ptr<QueueDiscItem> item)
   NS_LOG_FUNCTION (this << item);
 
   QueueSize nQueued = GetCurrentSize ();
+
+  if (m_idle)
+    {
+      Time m_idleEndTime = Simulator :: Now ();
+      m_totalIdleTime += (m_idleEndTime - m_idleStartTime);
+      m_idleEndTime = NanoSeconds (0);
+      m_idleStartTime = NanoSeconds (0);
+      m_idle = false;
+    }
+
 
   if (nQueued + item > GetMaxSize ())
     {
@@ -218,12 +229,7 @@ PiQueueDisc::DoEnqueue (Ptr<QueueDiscItem> item)
   bool retval = GetInternalQueue (0)->Enqueue (item);
 
   //Self Tuning PI
-  if (m_idle)
-    {
-      Time now = Simulator :: Now ();
-      m_idleTime = (now - m_idleStartTime);
-    }
-  m_idle = false;
+
   // If Queue::Enqueue fails, QueueDisc::Drop is called by the internal queue
   // because QueueDisc::AddInternalQueue sets the drop callback
 
@@ -245,6 +251,9 @@ PiQueueDisc::InitializeParams (void)
       m_oldThc = 0;
       m_oldThnrc = 0;
       m_idle = true;
+      m_idleStartTime = NanoSeconds (0);
+      m_idleEndTime = NanoSeconds (0);
+      m_totalIdleTime = NanoSeconds (0);
       m_oldRoutBusyTime = NanoSeconds (0);
     }
 }
@@ -285,30 +294,52 @@ void PiQueueDisc::CalculateP ()
   //Self Tuning PI (STPI)
   if (m_isSTPI)
     {
-      m_routerBusyTime = uint32_t ((((Simulator :: Now ()) - m_oldRoutBusyTime) - m_idleTime).GetSeconds ());
-      if (m_routerBusyTime != NanoSeconds (0))
+      if (m_idle)
         {
-          m_capacity = m_departedPkts / (m_routerBusyTime);
+          m_idleEndTime = Simulator :: Now ();
+          m_totalIdleTime += (m_idleEndTime - m_idleStartTime);
+          m_idleEndTime = NanoSeconds (0);
+          m_idleStartTime = NanoSeconds (0);
+        }
+
+      m_rtt = 0.0025 / 1000.0;
+      m_routerBusyTime = double (((Seconds (1.0 / m_w)) - ((m_totalIdleTime))).GetSeconds ());
+      if (m_routerBusyTime > 0)
+        {
+          m_capacity = (m_departedPkts * m_meanPktSize * 8.0) / (m_routerBusyTime);
           m_thc = ((m_oldThc * (1 - m_kc)) + (m_kc * m_capacity));
-          if (m_dropProb != 0)
+          if (m_dropProb > 0)
             {
-              m_thnrc = (m_oldThnrc * (1 - m_knrc) + (m_knrc * (std :: sqrt (m_dropProb / 2))));
-              m_rtt = (((m_thnrc / m_thc)) / (std :: sqrt (m_dropProb / 2)));
+              m_thnrc = ((m_oldThnrc * (1 - m_knrc)) + (m_knrc * (std :: sqrt (m_dropProb / 2))));
+              //m_rtt = (((m_thnrc / m_thc)) / (std :: sqrt (m_dropProb / 2)));
+              //m_ki is alpha and m_Kp is beta
               m_kp = (2 * m_bpi * (std :: sqrt ((m_bpi * m_bpi) + 1)) * m_thnrc ) / (m_rtt * m_thc);
               m_ki = ((2 * m_thnrc) / m_rtt) * m_kp;
             }
         }
-      m_departedPkts = 0;
-      m_idleTime = NanoSeconds (0);
-      m_oldRoutBusyTime = Simulator :: Now ();
+
       if (GetMaxSize ().GetUnit () == QueueSizeUnit::BYTES)
         {
-          p = m_ki * ((qlen * 1.0 / m_meanPktSize) - m_qRef) + m_kp * (qlen * 1.0 / m_meanPktSize);
+          p = (m_ki * (qlen * 1.0 / m_meanPktSize) - m_qRef) + (m_kp * (qlen * 1.0 / m_meanPktSize));
+          //p = (m_ki * ((qlen * 1.0 / m_meanPktSize) - m_qRef)) - (m_kp * ((m_qOld * 1.0 / m_meanPktSize) - m_qRef)) + m_dropProb;
+
         }
       else
         {
-          p = m_ki * (qlen - m_qRef) + m_kp * qlen;
+          p = (m_ki * (qlen - m_qRef)) + (m_kp * qlen);
+          //p = (m_ki * (qlen - m_qRef)) - (m_kp * (m_qOld - m_qRef)) + m_dropProb;
         }
+      m_idleStartTime = NanoSeconds (0);
+      m_idleEndTime = NanoSeconds (0);
+      if (m_idle)
+        {
+          m_idleStartTime = Simulator :: Now ();
+        }
+
+
+      m_departedPkts = 0;
+      m_oldThnrc = m_thnrc;
+      m_oldThc = m_thc;
 
     }
 
@@ -329,6 +360,7 @@ void PiQueueDisc::CalculateP ()
   p = (p > 1) ? 1 : p;
 
   m_dropProb = p;
+  m_totalIdleTime = NanoSeconds (0);
   m_qOld = qlen;
   m_rtrsEvent = Simulator::Schedule (Time (Seconds (1.0 / m_w)), &PiQueueDisc::CalculateP, this);
 
@@ -340,20 +372,20 @@ PiQueueDisc::DoDequeue ()
 {
   NS_LOG_FUNCTION (this);
 
-  if (GetInternalQueue (0)->IsEmpty ())
+  if (!GetInternalQueue (0)->IsEmpty ())
     {
-      NS_LOG_LOGIC ("Queue empty");
-      //Self-Tuning PI
-      m_idleStartTime = Simulator::Now ();
-      m_idle = true;
-      return 0;
-    }
-  else
-    {
-
+      m_idle = false;
       Ptr<QueueDiscItem> item = StaticCast<QueueDiscItem> (GetInternalQueue (0)->Dequeue ());
       m_departedPkts++;
       return item;
+    }
+  else
+    {
+      NS_LOG_LOGIC ("Queue empty");
+      //Self-Tuning PI
+      m_idle = true;
+      m_idleStartTime = Simulator::Now ();
+      return 0;
     }
 }
 
@@ -396,7 +428,6 @@ PiQueueDisc::CheckConfig (void)
       // create a DropTail queue
       AddInternalQueue (CreateObjectWithAttributes<DropTailQueue<QueueDiscItem> >
                           ("MaxSize", QueueSizeValue (GetMaxSize ())));
-
     }
 
   if (GetNInternalQueues () != 1)
