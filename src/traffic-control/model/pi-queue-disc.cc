@@ -184,7 +184,6 @@ PiQueueDisc::GetQueueSize (void)
   return GetInternalQueue (0)->GetCurrentSize ().GetValue ();
 }
 
-
 int64_t
 PiQueueDisc::AssignStreams (int64_t stream)
 {
@@ -204,11 +203,6 @@ PiQueueDisc::DoEnqueue (Ptr<QueueDiscItem> item)
     {
       Time m_idleEndTime = Simulator :: Now ();
       m_totalIdleTime += (m_idleEndTime - m_idleStartTime);
-
-      //myfile.open ("results/gfc-dumbbell/stpi-stats4.txt", std::fstream::in | std::fstream::out | std::fstream::app);
-      //myfile << "idle End time" << m_idleEndTime <<" idle start time " << m_idleStartTime << "total idle time " << m_totalIdleTime << "\n";
-      //myfile << "\n";
-      //myfile.close ();
       m_idleEndTime = NanoSeconds (0);
       m_idleStartTime = NanoSeconds (0);
       m_idle = false;
@@ -309,18 +303,16 @@ void PiQueueDisc::CalculateP ()
         }
 
       m_rtt = 0.0025 / 1000.0;
-      m_thc = 5000000.0;
       m_routerBusyTime = double (((Seconds (1.0 / m_w)) - ((m_totalIdleTime))).GetSeconds ());
       if (m_routerBusyTime > 0)
         {
-          //m_capacity = (m_departedPkts * m_meanPktSize * 8.0) / (m_routerBusyTime);
-          //m_thc = ((m_oldThc * (1 - m_kc)) + (m_kc * m_capacity));
-
-          // m_rtt = 0.0025 / 1000.0;
+          m_capacity = (m_departedPkts * m_meanPktSize * 8.0) / (m_routerBusyTime);
+          m_thc = ((m_oldThc * (1 - m_kc)) + (m_kc * m_capacity));
           if (m_dropProb > 0)
             {
               m_thnrc = ((m_oldThnrc * (1 - m_knrc)) + (m_knrc * (std :: sqrt (m_dropProb / 2))));
               //m_rtt = (((m_thnrc / m_thc)) / (std :: sqrt (m_dropProb / 2)));
+              //m_ki is alpha and m_Kp is beta
               m_kp = (2 * m_bpi * (std :: sqrt ((m_bpi * m_bpi) + 1)) * m_thnrc ) / (m_rtt * m_thc);
               m_ki = ((2 * m_thnrc) / m_rtt) * m_kp;
             }
@@ -344,26 +336,11 @@ void PiQueueDisc::CalculateP ()
           m_idleStartTime = Simulator :: Now ();
         }
 
-      myfile.open ("results/gfc-dumbbell/stpi-stats10.txt", std::fstream::in | std::fstream::out | std::fstream::app);
-      //myfile << "total idle time " << m_totalIdleTime << "\n";
-      m_departedPkts = 0;
 
-      //m_oldRoutBusyTime = Simulator :: Now ();
+      m_departedPkts = 0;
       m_oldThnrc = m_thnrc;
       m_oldThc = m_thc;
 
-      //myfile << "Router's Busy Time " << m_routerBusyTime << "\n";
-      //myfile << "Thc " << m_thc << "\n";
-      //myfile << "Capacity " << m_capacity << "\n";
-      /*myfile << "Thnrc " << m_thnrc << "\n";
-      myfile << "rtt  " << m_rtt << "\n";
-      myfile << "Kp " << m_kp << "\n";
-      myfile << "Ki " << m_ki << "\n";
-      myfile << "qlen " << qlen << "\n";
-      myfile << "qRef " << m_qRef << "\n";
-      myfile << "estimatedDropProb " << p << "\n";*/
-      //myfile << "Seconds(1.0 / m_w) " << Seconds(1.0 / m_w) << "\n";
-      //myfile << "subtraction " << ((Seconds(1.0 / m_w)) - ((m_totalIdleTime))).GetSeconds ()<<"\n";
     }
 
   // PI
@@ -382,9 +359,6 @@ void PiQueueDisc::CalculateP ()
   p = (p < 0) ? 0 : p;
   p = (p > 1) ? 1 : p;
 
-  myfile << "dropProb " << p << "\n";
-  myfile << "\n" << "\n";
-  myfile.close ();
   m_dropProb = p;
   m_totalIdleTime = NanoSeconds (0);
   m_qOld = qlen;
@@ -411,11 +385,6 @@ PiQueueDisc::DoDequeue ()
       //Self-Tuning PI
       m_idle = true;
       m_idleStartTime = Simulator::Now ();
-      //myfile.open ("results/gfc-dumbbell/stpi-stats4.txt", std::fstream::in | std::fstream::out | std::fstream::app);
-      //myfile << "idle start time " << m_idleStartTime << "\n";
-      //myfile << "\n";
-      //myfile.close ();
-
       return 0;
     }
 }
@@ -459,7 +428,6 @@ PiQueueDisc::CheckConfig (void)
       // create a DropTail queue
       AddInternalQueue (CreateObjectWithAttributes<DropTailQueue<QueueDiscItem> >
                           ("MaxSize", QueueSizeValue (GetMaxSize ())));
-
     }
 
   if (GetNInternalQueues () != 1)
